@@ -17,6 +17,7 @@
     --blue:   #64C4DE;
     --pink:   #EA5688;
     --white:  #FFFFFF;
+    --green:  #32B08C;
     --shadow: 0 6px 28px rgba(50, 29, 73, .18);
   }
 
@@ -175,6 +176,90 @@
     color: rgba(50, 29, 73, .6);
   }
 
+  /* ---------- member points ---------- */
+
+  .swatch--dot {
+    width: 16px;
+    height: 16px;
+    margin: 4px 2px 0;
+    border-radius: 50%;
+    border: 1.5px solid var(--white);
+    box-shadow: 0 0 0 1px rgba(50, 29, 73, .2);
+  }
+
+  .mapboxgl-popup-content {
+    padding: 14px 16px 15px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    font-family: inherit;
+    color: var(--purple);
+  }
+
+  .mapboxgl-popup-close-button { display: none; }
+
+  .popup-name {
+    margin: 0 22px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  .popup-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 9px;
+  }
+
+  .popup-tag {
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(50, 176, 140, .15);
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.4;
+    color: #1f7259;
+  }
+
+  .popup-link {
+    display: inline-block;
+    margin-top: 10px;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--green);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(50, 176, 140, .45);
+  }
+
+  .popup-link:hover { border-bottom-color: var(--green); }
+
+  .popup-none {
+    display: block;
+    margin-top: 10px;
+    font-size: 12.5px;
+    font-weight: 300;
+    color: rgba(50, 29, 73, .55);
+  }
+
+  .popup-close {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(50, 29, 73, .08);
+    color: var(--purple);
+    font: inherit;
+    font-size: 15px;
+    line-height: 20px;
+    cursor: pointer;
+  }
+
+  .popup-close:hover { background: rgba(50, 29, 73, .16); }
+
   /* ---------- password gate ---------- */
 
   #gate {
@@ -312,6 +397,16 @@
       <span class="switch" aria-hidden="true"></span>
     </label>
 
+    <label class="layer">
+      <input type="checkbox" data-layer="cee-members" checked>
+      <span class="swatch swatch--dot" style="background:#32B08C"></span>
+      <span class="text">
+        <span class="name">Community energy organisations</span>
+        <span class="desc">Members of Community Energy England, at their registered address. Hover a point for details, click to keep it open.</span>
+      </span>
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+
     <p class="note">Layers are semi-transparent, so overlapping areas — the strongest targets — show as blended colour. Each layer uses the latest data available in September 2026.</p>
   </div>
 </section>
@@ -339,6 +434,8 @@
   var HASH = '8027386bb683d4ac3c941eee4909a79a0a013bbbeacdf4a885158970ec901621';
   var KEY = 'targetmap-unlocked';
   var ENGLAND_AND_WALES = [[-6.5, 49.85], [1.85, 55.9]];
+  var MEMBERS_CSV = 'ceemembers.csv';
+  var MEMBERS_LAYER = 'cee-members';
 
   var gate = document.getElementById('gate');
   var form = document.getElementById('gate-card');
@@ -408,26 +505,225 @@
     map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
     map.addControl(new mapboxgl.GeolocateControl({ trackUserLocation: false }), 'bottom-right');
 
+    function apply(box) {
+      map.setLayoutProperty(box.dataset.layer, 'visibility', box.checked ? 'visible' : 'none');
+    }
+
+    function wire(box) {
+      apply(box);
+      box.addEventListener('change', function () { apply(box); });
+    }
+
+    function disable(box) {
+      box.disabled = true;
+      box.closest('.layer').style.opacity = '.4';
+    }
+
+    function boxFor(id) {
+      return document.querySelector('#panel-body input[data-layer="' + id + '"]');
+    }
+
     map.on('style.load', function () {
       document.querySelectorAll('#panel-body input[data-layer]').forEach(function (box) {
-        var id = box.dataset.layer;
-        if (!map.getLayer(id)) {
-          box.disabled = true;
-          box.closest('.layer').style.opacity = '.4';
-          return;
-        }
-        apply(box);
-        box.addEventListener('change', function () { apply(box); });
+        // The member layer isn't in the style — it arrives with the CSV.
+        if (box.dataset.layer === MEMBERS_LAYER) { return; }
+        if (map.getLayer(box.dataset.layer)) { wire(box); } else { disable(box); }
       });
 
-      function apply(box) {
-        map.setLayoutProperty(box.dataset.layer, 'visibility', box.checked ? 'visible' : 'none');
-      }
+      addMembers(map);
     });
 
     map.on('error', function (e) {
       if (e && e.error) { console.error('Mapbox:', e.error.message); }
     });
+
+    // ---- Community Energy England members ----
+
+    function addMembers(map) {
+      var box = boxFor(MEMBERS_LAYER);
+
+      fetch(MEMBERS_CSV).then(function (r) {
+        if (!r.ok) { throw new Error(r.status + ' ' + r.statusText); }
+        return r.text();
+      }).then(function (text) {
+        map.addSource(MEMBERS_LAYER, { type: 'geojson', data: toGeoJson(parseCsv(text)) });
+        map.addLayer({
+          id: MEMBERS_LAYER,
+          type: 'circle',
+          source: MEMBERS_LAYER,
+          paint: {
+            'circle-radius': 5,
+            'circle-color': '#32B08C',
+            'circle-opacity': 0.9,
+            'circle-stroke-width': 1.5,
+            'circle-stroke-color': '#FFFFFF'
+          }
+        });
+        if (box) { wire(box); }
+        bindMemberPopup(map);
+      }).catch(function (err) {
+        console.error('Members CSV:', err.message);
+        if (box) { disable(box); }
+      });
+    }
+
+    function bindMemberPopup(map) {
+      var popup = new mapboxgl.Popup({
+        closeButton: false,
+        closeOnClick: false,
+        offset: 12,
+        maxWidth: '260px'
+      });
+
+      // Hover opens the popup; clicking pins it so you can reach the link.
+      // Touch devices report no hover, and fall through to the click path.
+      var canHover = window.matchMedia('(hover: hover)').matches;
+      var pinned = false;
+      var timer = null;
+
+      function close() {
+        pinned = false;
+        popup.remove();
+      }
+
+      function open(feature, pin) {
+        window.clearTimeout(timer);
+        pinned = pin;
+        popup.setLngLat(feature.geometry.coordinates.slice())
+             .setHTML(memberHtml(feature.properties, pin))
+             .addTo(map);
+      }
+
+      // Mapbox rebuilds the popup element on each open, so wire it up every time.
+      popup.on('open', function () {
+        var el = popup.getElement();
+        if (!el) { return; }
+
+        var closer = el.querySelector('.popup-close');
+        if (closer) { closer.addEventListener('click', close); }
+
+        el.addEventListener('mouseenter', function () { window.clearTimeout(timer); });
+        el.addEventListener('mouseleave', function () {
+          if (!pinned) { timer = window.setTimeout(close, 180); }
+        });
+      });
+
+      map.on('mouseenter', MEMBERS_LAYER, function (e) {
+        map.getCanvas().style.cursor = 'pointer';
+        if (canHover && !pinned && e.features[0]) { open(e.features[0], false); }
+      });
+
+      map.on('mouseleave', MEMBERS_LAYER, function () {
+        map.getCanvas().style.cursor = '';
+        if (!pinned) { timer = window.setTimeout(close, 180); }
+      });
+
+      map.on('click', MEMBERS_LAYER, function (e) {
+        if (e.features[0]) { open(e.features[0], true); }
+      });
+
+      // A click on open water dismisses a pinned popup; so does Escape.
+      map.on('click', function (e) {
+        if (!map.getLayer(MEMBERS_LAYER)) { return; }
+        if (!map.queryRenderedFeatures(e.point, { layers: [MEMBERS_LAYER] }).length) { close(); }
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { close(); }
+      });
+    }
+  }
+
+  function memberHtml(props, pinned) {
+    var parts = [];
+
+    if (pinned) {
+      parts.push('<button type="button" class="popup-close" aria-label="Close">&times;</button>');
+    }
+
+    parts.push('<p class="popup-name">' + escapeHtml(props.name) + '</p>');
+
+    var tags = (props.technologies || '').split(';')
+      .map(function (t) { return t.trim(); })
+      .filter(Boolean);
+
+    if (tags.length) {
+      parts.push('<div class="popup-tags">' + tags.map(function (t) {
+        return '<span class="popup-tag">' + escapeHtml(t) + '</span>';
+      }).join('') + '</div>');
+    }
+
+    if (isHttpUrl(props.website)) {
+      parts.push('<a class="popup-link" href="' + escapeHtml(props.website) +
+                 '" target="_blank" rel="noopener noreferrer">Visit website</a>');
+    } else {
+      parts.push('<span class="popup-none">No website listed</span>');
+    }
+
+    return parts.join('');
+  }
+
+  function isHttpUrl(value) {
+    return /^https?:\/\//i.test(value || '');
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  // Minimal RFC 4180 reader — member names and regions contain commas.
+  function parseCsv(text) {
+    var rows = [], row = [], field = '', quoted = false;
+
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+
+      if (quoted) {
+        if (c !== '"') { field += c; }
+        else if (text[i + 1] === '"') { field += '"'; i++; }
+        else { quoted = false; }
+      } else if (c === '"') {
+        quoted = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') { i++; }
+        row.push(field); rows.push(row); row = []; field = '';
+      } else {
+        field += c;
+      }
+    }
+
+    if (field || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  function toGeoJson(rows) {
+    var head = (rows.shift() || []).map(function (h) { return h.trim(); });
+    var col = {};
+    head.forEach(function (h, i) { col[h] = i; });
+
+    var features = [];
+
+    rows.forEach(function (r) {
+      var lng = parseFloat(r[col.lng]);
+      var lat = parseFloat(r[col.lat]);
+      if (!isFinite(lng) || !isFinite(lat)) { return; }  // 11 members have no address
+
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+        properties: {
+          name: r[col.name] || 'Unnamed organisation',
+          website: r[col.website] || '',
+          technologies: r[col.technologies] || ''
+        }
+      });
+    });
+
+    return { type: 'FeatureCollection', features: features };
   }
 
   // Collapsed on narrow screens, expanded on wide ones — until the user decides for themselves.
