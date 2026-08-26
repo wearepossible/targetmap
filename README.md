@@ -1,9 +1,13 @@
 # targetmap
 
 Single-page map of overlapping target areas — deprivation, low ECO scheme take-up, and
-Conservative + Reform council seat share — with a floating legend that toggles each layer.
+Conservative + Reform council seat share, and Community Energy England's members — with a
+floating legend that toggles each layer.
 
 - `index.html` — the whole thing. Mapbox GL JS and Poppins load from CDNs; nothing to build.
+- `ceemembers.csv` — Community Energy England's members, scraped from their public
+  members page. The page parses it in the browser, so replacing this file updates the
+  map; keep the column names.
 - `robots.txt` / `_headers` — keep search engines out (Netlify reads both).
 
 ## Deploying
