@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, notranslate">
+<meta name="googlebot" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Target map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet">
+<style>
+  :root {
+    --purple: #321D49;
+    --blue:   #64C4DE;
+    --pink:   #EA5688;
+    --white:  #FFFFFF;
+    --shadow: 0 6px 28px rgba(50, 29, 73, .18);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    color: var(--purple);
+    background: var(--purple);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* White backdrop: the style's land layer is semi-transparent and composites onto it. */
+  #map { position: absolute; inset: 0; background: var(--white); }
+
+  .mapboxgl-ctrl-group { border-radius: 10px !important; box-shadow: var(--shadow) !important; }
+  .mapboxgl-ctrl-attrib, .mapboxgl-ctrl-attrib a { font-family: inherit; color: var(--purple); }
+
+  /* ---------- legend panel ---------- */
+
+  #panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    width: 330px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--white);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    z-index: 5;
+  }
+
+  #panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 16px 18px;
+    border: 0;
+    background: var(--purple);
+    color: var(--white);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .01em;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  #panel-header:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+
+  #chevron {
+    flex: none;
+    width: 14px;
+    height: 14px;
+    border-right: 2px solid var(--white);
+    border-bottom: 2px solid var(--white);
+    transform: rotate(45deg) translate(-2px, -2px);
+    transition: transform .2s ease;
+  }
+
+  #panel.collapsed #chevron { transform: rotate(-135deg) translate(-3px, -3px); }
+
+  #panel-body { padding: 6px 18px 18px; overflow-y: auto; }
+  #panel.collapsed #panel-body { display: none; }
+
+  .layer {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(50, 29, 73, .12);
+    cursor: pointer;
+  }
+
+  .layer:last-of-type { border-bottom: 0; padding-bottom: 4px; }
+
+  .swatch {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    border-radius: 5px;
+    border: 1px solid rgba(50, 29, 73, .2);
+    transition: opacity .2s ease;
+  }
+
+  .layer input:not(:checked) ~ .swatch { opacity: .25; }
+
+  .text { flex: 1 1 auto; min-width: 0; }
+
+  .name {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.3;
+  }
+
+  .desc {
+    display: block;
+    margin-top: 3px;
+    font-size: 12.5px;
+    font-weight: 300;
+    line-height: 1.45;
+    color: rgba(50, 29, 73, .72);
+  }
+
+  .layer input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+
+  .switch {
+    flex: none;
+    position: relative;
+    width: 40px;
+    height: 22px;
+    margin-top: 1px;
+    border-radius: 11px;
+    background: rgba(50, 29, 73, .22);
+    transition: background .2s ease;
+  }
+
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--white);
+    transition: transform .2s ease;
+  }
+
+  .layer input:checked ~ .switch { background: var(--pink); }
+  .layer input:checked ~ .switch::after { transform: translateX(18px); }
+  .layer input:focus-visible ~ .switch { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+  .note {
+    margin: 14px 0 0;
+    padding-top: 12px;
+    border-top: 1px solid rgba(50, 29, 73, .12);
+    font-size: 11.5px;
+    font-weight: 300;
+    line-height: 1.5;
+    color: rgba(50, 29, 73, .6);
+  }
+
+  /* ---------- password gate ---------- */
+
+  #gate {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--purple);
+  }
+
+  #gate[hidden] { display: none; }
+
+  #gate-card {
+    width: 100%;
+    max-width: 380px;
+    padding: 34px 32px 30px;
+    border-radius: 16px;
+    background: var(--white);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .35);
+    text-align: left;
+  }
+
+  #gate-card h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+
+  #gate-card p {
+    margin: 8px 0 22px;
+    font-size: 13.5px;
+    font-weight: 300;
+    line-height: 1.5;
+    color: rgba(50, 29, 73, .7);
+  }
+
+  #gate-card label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+  }
+
+  #password {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid rgba(50, 29, 73, .25);
+    border-radius: 9px;
+    background: var(--white);
+    font: inherit;
+    font-size: 15px;
+    color: var(--purple);
+  }
+
+  #password:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(100, 196, 222, .35); }
+
+  #gate button {
+    width: 100%;
+    margin-top: 16px;
+    padding: 13px 16px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--pink);
+    color: var(--white);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s ease;
+  }
+
+  #gate button:hover { background: #d94578; }
+  #gate button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+  #error {
+    min-height: 18px;
+    margin: 10px 0 0;
+    font-size: 12.5px;
+    font-weight: 400;
+    color: var(--pink);
+  }
+
+  .bar { height: 5px; display: flex; border-radius: 3px; overflow: hidden; margin-bottom: 22px; }
+  .bar span { flex: 1; }
+
+  @media (max-width: 640px) {
+    #panel { top: 10px; left: 10px; right: 10px; width: auto; max-height: calc(100vh - 20px); }
+  }
+</style>
+</head>
+<body>
+
+<div id="map" aria-label="Map of target areas"></div>
+
+<section id="panel" hidden>
+  <button id="panel-header" type="button" aria-expanded="true" aria-controls="panel-body">
+    <span>Target areas</span>
+    <span id="chevron" aria-hidden="true"></span>
+  </button>
+  <div id="panel-body">
+
+    <label class="layer">
+      <input type="checkbox" data-layer="imd" checked>
+      <span class="swatch" style="background:#321D49"></span>
+      <span class="text">
+        <span class="name">Deprivation</span>
+        <span class="desc">Neighbourhoods in the most deprived fifth of England on the English Index of Multiple Deprivation 2025.</span>
+      </span>
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+
+    <label class="layer">
+      <input type="checkbox" data-layer="low-eco-takeup" checked>
+      <span class="swatch" style="background:#EA5688"></span>
+      <span class="text">
+        <span class="name">Low ECO take-up</span>
+        <span class="desc">Constituencies in Great Britain where fewer than 7.5% of households received measures under the Energy Company Obligation.</span>
+      </span>
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+
+    <label class="layer">
+      <input type="checkbox" data-layer="toryreform-seatshare" checked>
+      <span class="swatch" style="background:#64C4DE"></span>
+      <span class="text">
+        <span class="name">Conservative &amp; Reform seat share</span>
+        <span class="desc">Councils where the Conservatives and Reform UK together held more than half the seats.</span>
+      </span>
+      <span class="switch" aria-hidden="true"></span>
+    </label>
+
+    <p class="note">Layers are semi-transparent, so overlapping areas — the strongest targets — show as blended colour. Each layer uses the latest data available in September 2026.</p>
+  </div>
+</section>
+
+<div id="gate">
+  <form id="gate-card">
+    <div class="bar"><span style="background:#321D49"></span><span style="background:#64C4DE"></span><span style="background:#EA5688"></span></div>
+    <h1>Target map</h1>
+    <p>Internal tool. Enter the password to continue.</p>
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+    <p id="error" role="alert"></p>
+    <button type="submit">Open map</button>
+  </form>
+</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var TOKEN = 'pk.eyJ1IjoicmFkaW9lZGl0IiwiYSI6ImNpZ2F4NGw1MzFhaDd0Zmx5NGtoaXBnZTgifQ.LKXJIMW7qqWDRD8QCnMqaw';
+  var STYLE = 'mapbox://styles/radioedit/cmt1fk8py002h01s39qjmdqo6';
+  // SHA-256 of the password. Client-side only — a speed bump, not real security.
+  var HASH = '8027386bb683d4ac3c941eee4909a79a0a013bbbeacdf4a885158970ec901621';
+  var KEY = 'targetmap-unlocked';
+  var ENGLAND_AND_WALES = [[-6.5, 49.85], [1.85, 55.9]];
+
+  var gate = document.getElementById('gate');
+  var form = document.getElementById('gate-card');
+  var input = document.getElementById('password');
+  var error = document.getElementById('error');
+  var panel = document.getElementById('panel');
+  var header = document.getElementById('panel-header');
+
+  var mapStarted = false;
+
+  function digest(text) {
+    var bytes = new TextEncoder().encode(text);
+    return crypto.subtle.digest('SHA-256', bytes).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+    });
+  }
+
+  function unlock() {
+    gate.hidden = true;
+    panel.hidden = false;
+    if (!mapStarted) { mapStarted = true; startMap(); }
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    error.textContent = '';
+    digest(input.value.trim()).then(function (hex) {
+      if (hex === HASH) {
+        try { sessionStorage.setItem(KEY, '1'); } catch (err) { /* private mode */ }
+        unlock();
+      } else {
+        error.textContent = 'That password isn’t right. Try again.';
+        input.select();
+      }
+    }).catch(function () {
+      error.textContent = 'Couldn’t check the password — this page needs to be served over HTTPS.';
+    });
+  });
+
+  function startMap() {
+    mapboxgl.accessToken = TOKEN;
+
+    var map = new mapboxgl.Map({
+      container: 'map',
+      style: STYLE,
+      center: [-2.3, 52.9],
+      zoom: 6,
+      minZoom: 4,
+      maxZoom: 15,
+      attributionControl: true
+    });
+
+    // Keep England and Wales framed — through late layout shifts, an orientation
+    // change, a phone's disappearing URL bar — until the user takes over.
+    var userMoved = false;
+
+    function frame() {
+      map.fitBounds(ENGLAND_AND_WALES, { padding: 24, duration: 0 });
+    }
+
+    map.on('movestart', function (e) { if (e.originalEvent) { userMoved = true; } });
+    map.on('load', function () { map.resize(); frame(); });
+    map.on('resize', function () { if (!userMoved) { frame(); } });
+
+    map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), 'bottom-right');
+    map.addControl(new mapboxgl.GeolocateControl({ trackUserLocation: false }), 'bottom-right');
+
+    map.on('style.load', function () {
+      document.querySelectorAll('#panel-body input[data-layer]').forEach(function (box) {
+        var id = box.dataset.layer;
+        if (!map.getLayer(id)) {
+          box.disabled = true;
+          box.closest('.layer').style.opacity = '.4';
+          return;
+        }
+        apply(box);
+        box.addEventListener('change', function () { apply(box); });
+      });
+
+      function apply(box) {
+        map.setLayoutProperty(box.dataset.layer, 'visibility', box.checked ? 'visible' : 'none');
+      }
+    });
+
+    map.on('error', function (e) {
+      if (e && e.error) { console.error('Mapbox:', e.error.message); }
+    });
+  }
+
+  // Collapsed on narrow screens, expanded on wide ones — until the user decides for themselves.
+  function setCollapsed(collapsed) {
+    panel.classList.toggle('collapsed', collapsed);
+    header.setAttribute('aria-expanded', String(!collapsed));
+  }
+
+  var narrow = window.matchMedia('(max-width: 640px)');
+  var userChose = false;
+
+  header.addEventListener('click', function () {
+    userChose = true;
+    setCollapsed(!panel.classList.contains('collapsed'));
+  });
+
+  narrow.addEventListener('change', function (e) { if (!userChose) { setCollapsed(e.matches); } });
+  setCollapsed(narrow.matches);
+
+  var alreadyIn = false;
+  try { alreadyIn = sessionStorage.getItem(KEY) === '1'; } catch (err) { /* private mode */ }
+
+  if (alreadyIn) { unlock(); } else { input.focus(); }
+})();
+</script>
+</body>
+</html>
