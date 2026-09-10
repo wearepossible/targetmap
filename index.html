@@ -365,7 +365,7 @@
       <span class="swatch swatch--dot" style="background:#32B08C"></span>
       <span class="text">
         <span class="name">Community energy organisations</span>
-        <span class="desc">Members of Community Energy England, at their registered address. Hover a point to name it, click to keep the label open.</span>
+        <span class="desc">Members of Community Energy England, at their registered address — fanned out slightly where several share one. Hover a point to name it, click to keep the label open.</span>
       </span>
       <span class="switch" aria-hidden="true"></span>
     </label>
@@ -648,7 +648,7 @@
     rows.forEach(function (r) {
       var lng = parseFloat(r[col.Longitude]);
       var lat = parseFloat(r[col.Latitude]);
-      if (!isFinite(lng) || !isFinite(lat)) { return; }  // most rows are #N/A
+      if (!isFinite(lng) || !isFinite(lat)) { return; }  // 7 rows have no coordinates
 
       features.push({
         type: 'Feature',
@@ -657,7 +657,45 @@
       });
     });
 
-    return { type: 'FeatureCollection', features: features };
+    return { type: 'FeatureCollection', features: fanOut(features) };
+  }
+
+  // Organisations sharing a registered address land on one dot and hide each
+  // other. Fan each such group evenly around its true position so every one of
+  // them can be picked, keeping neighbours FAN_SPACING_M apart however many
+  // there are. Deterministic, so the arrangement is the same on every load.
+  var FAN_SPACING_M = 300;
+  var METRES_PER_DEGREE = 111320;
+
+  function fanOut(features) {
+    var groups = {};
+
+    features.forEach(function (f) {
+      var key = f.geometry.coordinates.join(',');
+      (groups[key] = groups[key] || []).push(f);
+    });
+
+    Object.keys(groups).forEach(function (key) {
+      var group = groups[key];
+      if (group.length < 2) { return; }
+
+      var radius = (FAN_SPACING_M / 2) / Math.sin(Math.PI / group.length);
+
+      group.forEach(function (f, i) {
+        var lng = f.geometry.coordinates[0];
+        var lat = f.geometry.coordinates[1];
+        var angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+        var east = radius * Math.cos(angle);
+        var north = radius * Math.sin(angle);
+
+        f.geometry.coordinates = [
+          lng + east / (METRES_PER_DEGREE * Math.cos(lat * Math.PI / 180)),
+          lat + north / METRES_PER_DEGREE
+        ];
+      });
+    });
+
+    return features;
   }
 
   // Collapsed on narrow screens, expanded on wide ones — until the user decides for themselves.
