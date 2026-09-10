@@ -204,43 +204,6 @@
     line-height: 1.3;
   }
 
-  .popup-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 9px;
-  }
-
-  .popup-tag {
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: rgba(50, 176, 140, .15);
-    font-size: 11px;
-    font-weight: 400;
-    line-height: 1.4;
-    color: #1f7259;
-  }
-
-  .popup-link {
-    display: inline-block;
-    margin-top: 10px;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--green);
-    text-decoration: none;
-    border-bottom: 1px solid rgba(50, 176, 140, .45);
-  }
-
-  .popup-link:hover { border-bottom-color: var(--green); }
-
-  .popup-none {
-    display: block;
-    margin-top: 10px;
-    font-size: 12.5px;
-    font-weight: 300;
-    color: rgba(50, 29, 73, .55);
-  }
-
   .popup-close {
     position: absolute;
     top: 9px;
@@ -402,7 +365,7 @@
       <span class="swatch swatch--dot" style="background:#32B08C"></span>
       <span class="text">
         <span class="name">Community energy organisations</span>
-        <span class="desc">Members of Community Energy England, at their registered address. Hover a point for details, click to keep it open.</span>
+        <span class="desc">Members of Community Energy England, at their registered address — fanned out slightly where several share one. Hover a point to name it, click to keep the label open.</span>
       </span>
       <span class="switch" aria-hidden="true"></span>
     </label>
@@ -635,36 +598,11 @@
   }
 
   function memberHtml(props, pinned) {
-    var parts = [];
+    var close = pinned
+      ? '<button type="button" class="popup-close" aria-label="Close">&times;</button>'
+      : '';
 
-    if (pinned) {
-      parts.push('<button type="button" class="popup-close" aria-label="Close">&times;</button>');
-    }
-
-    parts.push('<p class="popup-name">' + escapeHtml(props.name) + '</p>');
-
-    var tags = (props.technologies || '').split(';')
-      .map(function (t) { return t.trim(); })
-      .filter(Boolean);
-
-    if (tags.length) {
-      parts.push('<div class="popup-tags">' + tags.map(function (t) {
-        return '<span class="popup-tag">' + escapeHtml(t) + '</span>';
-      }).join('') + '</div>');
-    }
-
-    if (isHttpUrl(props.website)) {
-      parts.push('<a class="popup-link" href="' + escapeHtml(props.website) +
-                 '" target="_blank" rel="noopener noreferrer">Visit website</a>');
-    } else {
-      parts.push('<span class="popup-none">No website listed</span>');
-    }
-
-    return parts.join('');
-  }
-
-  function isHttpUrl(value) {
-    return /^https?:\/\//i.test(value || '');
+    return close + '<p class="popup-name">' + escapeHtml(props.name) + '</p>';
   }
 
   function escapeHtml(value) {
@@ -708,22 +646,56 @@
     var features = [];
 
     rows.forEach(function (r) {
-      var lng = parseFloat(r[col.lng]);
-      var lat = parseFloat(r[col.lat]);
-      if (!isFinite(lng) || !isFinite(lat)) { return; }  // 11 members have no address
+      var lng = parseFloat(r[col.Longitude]);
+      var lat = parseFloat(r[col.Latitude]);
+      if (!isFinite(lng) || !isFinite(lat)) { return; }  // 7 rows have no coordinates
 
       features.push({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [lng, lat] },
-        properties: {
-          name: r[col.name] || 'Unnamed organisation',
-          website: r[col.website] || '',
-          technologies: r[col.technologies] || ''
-        }
+        properties: { name: r[col.Organisation] || 'Unnamed organisation' }
       });
     });
 
-    return { type: 'FeatureCollection', features: features };
+    return { type: 'FeatureCollection', features: fanOut(features) };
+  }
+
+  // Organisations sharing a registered address land on one dot and hide each
+  // other. Fan each such group evenly around its true position so every one of
+  // them can be picked, keeping neighbours FAN_SPACING_M apart however many
+  // there are. Deterministic, so the arrangement is the same on every load.
+  var FAN_SPACING_M = 300;
+  var METRES_PER_DEGREE = 111320;
+
+  function fanOut(features) {
+    var groups = {};
+
+    features.forEach(function (f) {
+      var key = f.geometry.coordinates.join(',');
+      (groups[key] = groups[key] || []).push(f);
+    });
+
+    Object.keys(groups).forEach(function (key) {
+      var group = groups[key];
+      if (group.length < 2) { return; }
+
+      var radius = (FAN_SPACING_M / 2) / Math.sin(Math.PI / group.length);
+
+      group.forEach(function (f, i) {
+        var lng = f.geometry.coordinates[0];
+        var lat = f.geometry.coordinates[1];
+        var angle = (2 * Math.PI * i) / group.length - Math.PI / 2;
+        var east = radius * Math.cos(angle);
+        var north = radius * Math.sin(angle);
+
+        f.geometry.coordinates = [
+          lng + east / (METRES_PER_DEGREE * Math.cos(lat * Math.PI / 180)),
+          lat + north / METRES_PER_DEGREE
+        ];
+      });
+    });
+
+    return features;
   }
 
   // Collapsed on narrow screens, expanded on wide ones — until the user decides for themselves.

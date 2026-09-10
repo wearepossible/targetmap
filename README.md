@@ -5,9 +5,16 @@ Conservative + Reform council seat share, and Community Energy England's members
 floating legend that toggles each layer.
 
 - `index.html` — the whole thing. Mapbox GL JS and Poppins load from CDNs; nothing to build.
-- `ceemembers.csv` — Community Energy England's members, scraped from their public
-  members page. The page parses it in the browser, so replacing this file updates the
-  map; keep the column names.
+- `ceemembers.csv` — Community Energy England's members. The page parses it in the
+  browser, so replacing this file updates the map; keep the column names
+  (`Organisation`, `Region`, `Postcode`, `Latitude`, `Longitude`). Rows with no
+  latitude or longitude are skipped — currently 7 of 342, so 335 are plotted.
+
+  Organisations sharing a registered address would stack into a single dot, so each
+  such group is fanned evenly around its true position, 300 m between neighbours
+  (`FAN_SPACING_M` in `index.html`). They read as one dot nationally and separate
+  from about zoom 11. The largest group — twelve at Energy4All's Barrow office —
+  sits on a ring 579 m across.
 - `robots.txt` / `_headers` — keep search engines out (Netlify reads both).
 
 ## Deploying
