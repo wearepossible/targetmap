@@ -204,43 +204,6 @@
     line-height: 1.3;
   }
 
-  .popup-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 9px;
-  }
-
-  .popup-tag {
-    padding: 3px 8px;
-    border-radius: 999px;
-    background: rgba(50, 176, 140, .15);
-    font-size: 11px;
-    font-weight: 400;
-    line-height: 1.4;
-    color: #1f7259;
-  }
-
-  .popup-link {
-    display: inline-block;
-    margin-top: 10px;
-    font-size: 12.5px;
-    font-weight: 500;
-    color: var(--green);
-    text-decoration: none;
-    border-bottom: 1px solid rgba(50, 176, 140, .45);
-  }
-
-  .popup-link:hover { border-bottom-color: var(--green); }
-
-  .popup-none {
-    display: block;
-    margin-top: 10px;
-    font-size: 12.5px;
-    font-weight: 300;
-    color: rgba(50, 29, 73, .55);
-  }
-
   .popup-close {
     position: absolute;
     top: 9px;
@@ -402,7 +365,7 @@
       <span class="swatch swatch--dot" style="background:#32B08C"></span>
       <span class="text">
         <span class="name">Community energy organisations</span>
-        <span class="desc">Members of Community Energy England, at their registered address. Hover a point for details, click to keep it open.</span>
+        <span class="desc">Members of Community Energy England, at their registered address. Hover a point to name it, click to keep the label open.</span>
       </span>
       <span class="switch" aria-hidden="true"></span>
     </label>
@@ -635,36 +598,11 @@
   }
 
   function memberHtml(props, pinned) {
-    var parts = [];
+    var close = pinned
+      ? '<button type="button" class="popup-close" aria-label="Close">&times;</button>'
+      : '';
 
-    if (pinned) {
-      parts.push('<button type="button" class="popup-close" aria-label="Close">&times;</button>');
-    }
-
-    parts.push('<p class="popup-name">' + escapeHtml(props.name) + '</p>');
-
-    var tags = (props.technologies || '').split(';')
-      .map(function (t) { return t.trim(); })
-      .filter(Boolean);
-
-    if (tags.length) {
-      parts.push('<div class="popup-tags">' + tags.map(function (t) {
-        return '<span class="popup-tag">' + escapeHtml(t) + '</span>';
-      }).join('') + '</div>');
-    }
-
-    if (isHttpUrl(props.website)) {
-      parts.push('<a class="popup-link" href="' + escapeHtml(props.website) +
-                 '" target="_blank" rel="noopener noreferrer">Visit website</a>');
-    } else {
-      parts.push('<span class="popup-none">No website listed</span>');
-    }
-
-    return parts.join('');
-  }
-
-  function isHttpUrl(value) {
-    return /^https?:\/\//i.test(value || '');
+    return close + '<p class="popup-name">' + escapeHtml(props.name) + '</p>';
   }
 
   function escapeHtml(value) {
@@ -708,18 +646,14 @@
     var features = [];
 
     rows.forEach(function (r) {
-      var lng = parseFloat(r[col.lng]);
-      var lat = parseFloat(r[col.lat]);
-      if (!isFinite(lng) || !isFinite(lat)) { return; }  // 11 members have no address
+      var lng = parseFloat(r[col.Longitude]);
+      var lat = parseFloat(r[col.Latitude]);
+      if (!isFinite(lng) || !isFinite(lat)) { return; }  // most rows are #N/A
 
       features.push({
         type: 'Feature',
         geometry: { type: 'Point', coordinates: [lng, lat] },
-        properties: {
-          name: r[col.name] || 'Unnamed organisation',
-          website: r[col.website] || '',
-          technologies: r[col.technologies] || ''
-        }
+        properties: { name: r[col.Organisation] || 'Unnamed organisation' }
       });
     });
 

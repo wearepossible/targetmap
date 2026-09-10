@@ -5,9 +5,11 @@ Conservative + Reform council seat share, and Community Energy England's members
 floating legend that toggles each layer.
 
 - `index.html` — the whole thing. Mapbox GL JS and Poppins load from CDNs; nothing to build.
-- `ceemembers.csv` — Community Energy England's members, scraped from their public
-  members page. The page parses it in the browser, so replacing this file updates the
-  map; keep the column names.
+- `ceemembers.csv` — Community Energy England's members. The page parses it in the
+  browser, so replacing this file updates the map; keep the column names
+  (`Organisation`, `Region`, `Postcode`, `Latitude`, `Longitude`). Rows whose
+  `Latitude`/`Longitude` are `#N/A` are skipped — currently 229 of 342, so only 113
+  organisations are plotted.
 - `robots.txt` / `_headers` — keep search engines out (Netlify reads both).
 
 ## Deploying
